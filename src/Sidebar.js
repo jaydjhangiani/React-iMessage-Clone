@@ -6,13 +6,36 @@ import RateReviewOutlinedIcon from "@material-ui/icons/RateReviewOutlined";
 import SidebarChat from "./SidebarChat";
 import { useSelector } from "react-redux";
 import { selectUser } from "./features/userSlice";
-import db, { auth } from "./firebase";
+import { auth } from "./firebase";
+import axios from './axios.js';
+import Pusher from 'pusher-js'
+
 
 function Sidebar() {
   const user = useSelector(selectUser);
   const [chats, setChats] = useState([]);
 
+  const pusher = new Pusher('92dcb7740b4564d4fd3d', {
+    cluster: 'ap2'
+  });
+
+  const getChats = () => {
+    axios.get('/get/conversationList')
+      .then((res) => {
+        setChats(res.data)
+      })
+  }
+
   useEffect(() => {
+    getChats()
+    const channel = pusher.subscribe('chats');
+    channel.bind('newChat', function(data) {
+      getChats()
+    });
+    
+  },[]);
+
+  /*useEffect(() => {
     db.collection("chats").onSnapshot((snapshot) =>
       setChats(
         snapshot.docs.map((doc) => ({
@@ -31,7 +54,32 @@ function Sidebar() {
         chatName: chatName,
       });
     }
-  };
+  };*/
+
+  const addChat = (e) => {
+    e.preventDefault()
+
+    const chatName = prompt('Please enter a chat name')
+    const firstMsg = prompt('please send a welcome message')
+
+    if(chatName && firstMsg) {
+      let chatId = ''
+
+      axios.post('/new/conversation',{
+        chatName: chatName
+      }).then((res) => {
+        chatId = res.data._id
+      }).then(() => {
+        axios.post(`/new/message?id=${chatId}`,{
+          message: firstMsg,
+          timestamp: Date.now(),
+          user:user
+        })
+      })
+
+
+    }
+  }
 
   return (
     <div className="sidebar">
@@ -52,8 +100,8 @@ function Sidebar() {
       </div>
 
       <div className="sidebar__chats">
-        {chats.map(({ id, data: { chatName } }) => (
-          <SidebarChat key={id} id={id} chatName={chatName} />
+        {chats.map(({ id, name , timestamp}) => (
+          <SidebarChat key={id} id={id} chatName={name} timestamp={timestamp} />
         ))}
       </div>
     </div>

@@ -4,11 +4,11 @@ import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import "./Chat.css";
 import { selectChatId, selectChatName } from "./features/chatSlice";
-import db from "./firebase";
 import Message from "./Message";
-import firebase from "firebase";
 import { selectUser } from "./features/userSlice";
 import FlipMove from "react-flip-move";
+import axios from './axios.js';
+import Pusher from "pusher-js";
 
 function Chat() {
   const user = useSelector(selectUser);
@@ -17,8 +17,28 @@ function Chat() {
   const chatId = useSelector(selectChatId);
   const [messages, setMessages] = useState([]);
 
+  const pusher = new Pusher('92dcb7740b4564d4fd3d', {
+    cluster: 'ap2'
+  });
+
+  const getConversation = (chatId) => {
+    if(chatId){
+      axios.get(`/get/conversation?id=${chatId}`).then((res) => {
+        setMessages(res.data[0].conversation)
+      })
+    }
+  }
+
   useEffect(() => {
-    if (chatId) {
+    pusher.unsubscribe('messages')
+    getConversation(chatId)
+    const channel = pusher.subscribe('messages');
+    channel.bind('newMessage', function(data) {
+      getConversation(chatId)
+    });
+    
+    
+    /*if (chatId) {
       db.collection("chats")
         .doc(chatId)
         .collection("messages")
@@ -31,10 +51,10 @@ function Chat() {
             }))
           )
         );
-    }
+    }*/
   }, [chatId]);
 
-  const sendMessage = (e) => {
+  /*const sendMessage = (e) => {
     e.preventDefault();
 
     db.collection("chats").doc(chatId).collection("messages").add({
@@ -47,7 +67,18 @@ function Chat() {
     });
 
     setInput("");
-  };
+  };*/
+
+  const sendMessage = (e) => {
+    e.preventDefault();
+
+    axios.post(`/new/message?id=${chatId}`,{
+      message: input,
+      timestamp: Date.now(),
+      user: user
+    })
+    setInput("");
+  }
 
   return (
     <div className="chat">
@@ -61,8 +92,8 @@ function Chat() {
       {/* chat messages */}
       <div className="chat__messages">
         <FlipMove>
-          {messages.map(({ id, data }) => (
-            <Message key={id} contents={data} />
+          {messages.map(({ user,_id,message,timestamp }) => (
+            <Message key={_id} id={_id} sender={user} message={message} timestamp={timestamp} />
           ))}
         </FlipMove>
       </div>
